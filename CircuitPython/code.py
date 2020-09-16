@@ -36,13 +36,10 @@ while True:
         Data_Values = [time.monotonic(),accelerometer.acceleration[0],accelerometer.acceleration[1],accelerometer.acceleration[2]]
         #print(*Data_Names, sep = ", ")
         #print(*Data_Values, sep = ", ")
-        with open("/sd/data.txt", "a") as file:
+        with open("/sd/data.csv", "a") as file:
             led.value = True
-            accleration_x = accelerometer.acceleration[1]
+            accleration_x = accelerometer.acceleration[0]
             print("X acceleration = %0.0001f" % accleration_x)
-            file.write("%0.01f\n" % accleration_x)
+            file.write(str(Data_Values[0]) + "," + str(Data_Values[1])  + "," + str(Data_Values[2])  + "," + str(Data_Values[3]) + "\n")
             led.value = False  # Turn off LED to indicate we're done
         last_time = time.monotonic()
-
-
-

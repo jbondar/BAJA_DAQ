@@ -5,7 +5,7 @@ import board
 import busio
 import adafruit_rfm9x
 
-# Initializes on board LED for checking purposes
+# Initializes on board LED for testing purposes
 LED = digitalio.DigitalInOut(board.D13)
 LED.direction = digitalio.Direction.OUTPUT
 
@@ -22,6 +22,9 @@ spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
 
 # initialies the RFM Radio
 rfm9x = adafruit_rfm9x.RFM9x(spi, cs, reset, radio_freq)
+
+# set the transmit power, default is 13dB
+rfm9x.tx_power = 23
 
 # enable CRC checking
 rfm9x.enable_crc = True

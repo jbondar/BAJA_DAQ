@@ -5,9 +5,6 @@ import time
 import digitalio
 import adafruit_rfm9x
 
-# set the time interval (seconds) for sending packets
-transmit_interval = 5
-
 # radio frequency in MHz
 radio_freq = 915.0
 
@@ -18,11 +15,8 @@ spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
 cs = digitalio.DigitalInOut(board.D5)
 reset = digitalio.DigitalInOut(board.D6)
 
-# sets a baudrate
-baudrate = 5000000
-
 # initializes the rfm radio object, using the adafruit_rfm9x class
-rfm9x = adafruit_rfm9x.RFM9x(spi, cs, reset, radio_freq, baudrate)
+rfm9x = adafruit_rfm9x.RFM9x(spi, cs, reset, radio_freq, baudrate = 5000000)
 
 # set the transmit power, default is 13dB
 rfm9x.tx_power = 23
@@ -38,32 +32,36 @@ rfm9x.node = 1
 rfm9x.destination = 2
 
 # initialize counter
-counter = 0
 ack_failed_counter = 0
 
-test_list = [1.0, 2.0, 3.0, 2.5, 4.5, 8.9, 9.120]
-length = len(test_list)
+data = [1.0, 2.0, 2.5, 3.5, 4.5, 8.9, 9.120, 10, 13, 18, 21.5]
+length = len(data)
 
-# initialize flag and timer
-time_now = time.monotonic()
+# send startup message from my_node
+rfm9x.send_with_ack(bytes("startup message from node {}".format(rfm9x.node), "UTF-8"))
+
+# Wait to receive packets.
+print("Waiting for packets...")
+
 while True:
     # Look for a new packet: only accept if addresses to my_node
     packet = rfm9x.receive(with_ack=True, with_header=True)
     # If no packet was received during the timeout then None is returned.
     if packet is not None:
         # Received a packet!
-        # Print out the raw bytes of the packet: note to self what does this return
-        print("Received (raw payload): {0}".format(packet[4:]))
+        # Print out the raw bytes of the packet:
+        #print("Received (raw header):", [hex(x) for x in packet[0:4]])
+        #print("Received (raw payload): {0}".format(packet[4:]))
         print("RSSI: {0}".format(rfm9x.last_rssi))
-        # send reading after any packet received
-    if time.monotonic() - time_now > transmit_interval:
-        # send a  mesage to destination_node from my_node
-        tosend = str(test_list[counter])
-        # reset timer
-        time_now = time.monotonic()
-        counter += 1
-        if not rfm9x.send_with_ack(
-            bytes(tosend.format(rfm9x.node, counter), "UTF-8")
-            ):
+
+        tosend = str(data[0])
+
+        if rfm9x.send_with_ack(
+            bytes(tosend.format(rfm9x.node), "UTF-8")
+        ):
+            print("Sent: ", data[0])
+            data.pop(0)
+            ack_failed_counter = 0
+        else:
             ack_failed_counter += 1
-            print(" No Acknowledgement: ", counter, ack_failed_counter)
+            print("No Ack: ", counter, ack_failed_counter)

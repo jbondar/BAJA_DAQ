@@ -1,11 +1,11 @@
-# Code for Receiving Node (M0)
+# Code for Receiving Node (M4)
 import time
 import digitalio
 import board
 import busio
 import adafruit_rfm9x
 
-# Initializes on board LED for testing purposes
+# Initializes on board LED for checking purposes
 LED = digitalio.DigitalInOut(board.D13)
 LED.direction = digitalio.Direction.OUTPUT
 
@@ -13,18 +13,15 @@ LED.direction = digitalio.Direction.OUTPUT
 # Defines the Radio Frequency
 radio_freq = 915.0
 
-# Defines the pin & creates an instance of the rfm class
-cs = digitalio.DigitalInOut(board.RFM9X_CS)
-reset = digitalio.DigitalInOut(board.RFM9X_RST)
-
 # initializes the SPI Bus
 spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
 
-# initialies the RFM Radio
-rfm9x = adafruit_rfm9x.RFM9x(spi, cs, reset, radio_freq)
+# initializes the pinouts
+cs = digitalio.DigitalInOut(board.D5)
+reset = digitalio.DigitalInOut(board.D6)
 
-# set the transmit power, default is 13dB
-rfm9x.tx_power = 23
+# initializes the rfm radio object, using the adafruit_rfm9x class
+rfm9x = adafruit_rfm9x.RFM9x(spi, cs, reset, radio_freq, baudrate = 5000000)
 
 # enable CRC checking
 rfm9x.enable_crc = True
@@ -46,11 +43,13 @@ while True:
     # If no packet was received during the timeout then None is returned.
     if packet is not None:
         # Received a packet!
+        # Received a packet!
         # Print out the raw bytes of the packet:
+        print("Received (raw header):", [hex(x) for x in packet[0:4]])
         print("Received (raw payload): {0}".format(packet[4:]))
         print("RSSI: {0}".format(rfm9x.last_rssi))
         # send response 1/2 sec after any packet received
-        time.sleep(0.5)
+        #time.sleep(0.5)
         counter += 1
         # send a  mesage to destination_node from my_node
         if not rfm9x.send_with_ack(

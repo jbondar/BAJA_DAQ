@@ -4,6 +4,21 @@ import busio
 import time
 import digitalio
 import adafruit_rfm9x
+import struct
+
+# pack_data converts the data_to_pack to a byte array
+def pack_data(data_to_pack):
+    # First encode the number of data items, then the actual items
+    ba = struct.pack("!I" + "d" * len(data_to_pack),
+                    len(data_to_pack), *data_to_pack)
+    return ba
+
+# sendData sends the converted data to our 2nd node
+def sendData(data):
+    ts = pack_data(data)
+    rfm9x.send(ts)
+    # Leaving this in incase we want to use later
+    # time.sleep(0.1)
 
 # radio frequency in MHz
 radio_freq = 915.0
@@ -24,42 +39,20 @@ rfm9x.tx_power = 23
 # enable CRC checking
 rfm9x.enable_crc = True
 
-# set delay before sending ACK
-# rfm9x.ack_delay = 0.2
-
-# Sets num of retries
-rfm9x.ack_retries = 2
-
 # set node addresses
 rfm9x.node = 1
 rfm9x.destination = 2
 
-# initialize counter
-ack_failed_counter = 0
+# Test array
+data = [[0, 45.5, 2.23], [1, 45.5, 2.23],
+        [2, 45.5, 2.23], [3, 45.5, 2.23],
+        [4, 45.5, 2.23], [5, 45.5, 2.23],
+        [6, 45.5, 2.23], [7, 45.5, 2.23], [8, 45.5, 2.23]]
 
-data = [['s1', 45.5, 2.23], ['s2', 45.5, 2.23],['s3', 45.5, 2.23],['s4', 45.5, 2.23],['g', 45.5, 2.23]]
+cntr = 0
 
-# send startup message from my_node
-rfm9x.send_with_ack(bytes("startup message from node {}".format(rfm9x.node), "UTF-8"))
-
+# Loops thru array & sends
 while True:
-    # Look for a new packet: only accept if addresses to my_node
-    # If no packet was received during the timeout then None is returned.
-    packet = rfm9x.receive(with_ack=True, with_header=True)
-
-    # This statement checks if list is empty before sending
-    if data:
-        if (packet is not None):
-        # Received a packet!
-        # Print out the RSSI
-            print("RSSI: {0}".format(rfm9x.last_rssi))
-            tosend = str(data[0])
-            if rfm9x.send_with_ack(
-                bytes(tosend.format(rfm9x.node), "UTF-8")
-            ):
-                print("Sent: ", data[0])
-                data.pop(0)
-                ack_failed_counter = 0
-            else:
-                ack_failed_counter += 1
-                print("No Ack: ", counter, ack_failed_counter)
+    sendData(data[cntr])
+    cntr += 1
+    if (cntr == len(data)): cntr = 0

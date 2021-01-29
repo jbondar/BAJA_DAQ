@@ -15,8 +15,10 @@ def pack_data(data_to_pack):
 
 # sendData sends the converted data to our 2nd node
 def sendData(data):
-    ts = pack_data(data)
-    rfm9x.send(ts)
+    # checks to see if data is null
+    if data:
+        ts = pack_data(data)
+        rfm9x.send(ts)
     # Leaving this in incase we want to use later
     # time.sleep(0.1)
 
@@ -43,6 +45,9 @@ rfm9x.enable_crc = True
 rfm9x.node = 1
 rfm9x.destination = 2
 
+# below this point is for testing purposes and
+# will need to be changed when integrated into master
+
 # Test array
 data = [[0, 45.5, 2.23], [1, 45.5, 2.23],
         [2, 45.5, 2.23], [3, 45.5, 2.23],
@@ -51,7 +56,7 @@ data = [[0, 45.5, 2.23], [1, 45.5, 2.23],
 
 cntr = 0
 
-# Loops thru array & sends
+# Loops thru array & sends by calling sendData
 while True:
     sendData(data[cntr])
     cntr += 1

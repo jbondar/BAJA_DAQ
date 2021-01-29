@@ -4,6 +4,7 @@ import board
 import busio
 import adafruit_rfm9x
 import struct
+import time
 
 # unpack_data converts byte array to double
 def unpack_data(data_to_unpack):
@@ -12,6 +13,10 @@ def unpack_data(data_to_unpack):
     # Now pull the array of items
     arr = struct.unpack_from("!" + "d" * elen, data_to_unpack, 4)
     return arr
+
+# led pinouts definitions
+led = digitalio.DigitalInOut(board.D13)
+led.direction = digitalio.Direction.OUTPUT
 
 # The default baudrate is 5Mhz - matches transmitting baudrate
 # Defines the Radio Frequency
@@ -39,8 +44,11 @@ while True:
     packet = rfm9x.receive(with_header=True)
     # If no packet was received during the timeout then None is returned.
     if packet is not None:
+        led.value = True
         # Received a packet!
         print("RSSI: {0}".format(rfm9x.last_rssi))
         # WARNING! Always exclude the 1st 4 bytes of data from packet!
         data = unpack_data(packet[4:])
         print("Received Packet:", data)
+    else:
+        led.value = False

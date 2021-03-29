@@ -1,11 +1,15 @@
+
 import board
+import time
+import random
 import digitalio
 import busio
-import time
 import adafruit_sdcard
 import storage
-import busio
 import adafruit_adxl34x
+
+print("Hello, world!")
+
 
 
 # Set to false to disable testing/tracing code
@@ -16,30 +20,30 @@ TESTING = False
 
 # Pins
 SWITCH_PIN = board.D9
-
+LED_PIN = board.D13
 ################################################################################
 # Setup hardware
 
 # Setup a test switch connected to D9
-switch_io = digitalio.DigitalInOut(SWITCH_PIN)
-switch_io.direction = digitalio.Direction.INPUT
-switch_io.pull = digitalio.Pull.UP
-switch = Debouncer(switch_io)
+#switch_io = digitalio.DigitalInOut(SWITCH_PIN)
+#switch_io.direction = digitalio.Direction.INPUT
+#switch_io.pull = digitalio.Pull.UP
+#switch = Debouncer(switch_io)
 
 # Setup a LED connected to D13 (led is smt on board)
-led = digitalio.DigitalInOut(board.D13)
+led = digitalio.DigitalInOut(LED_PIN)
 led.direction = digitalio.Direction.OUTPUT
 
 # Connect to the card and mount the filesystem.
-spi = busio.SPI(board.SD_SCK, board.SD_MOSI, board.SD_MISO)
-cs = digitalio.DigitalInOut(board.SD_CS)
-sdcard = adafruit_sdcard.SDCard(spi, cs)
-vfs = storage.VfsFat(sdcard)
-storage.mount(vfs, "/sd")
+#spi = busio.SPI(board.SD_SCK, board.SD_MOSI, board.SD_MISO)
+#cs = digitalio.DigitalInOut(board.SD_CS)
+#sdcard = adafruit_sdcard.SDCard(spi, cs)
+#vfs = storage.VfsFat(sdcard)
+#storage.mount(vfs, "/sd")
 
 # setup accelerometer - this is temp and will require code for multiple accels and the i2c multiplexer
-i2c = busio.I2C(board.SCL, board.SDA)
-accelerometer = adafruit_adxl34x.ADXL345(i2c)
+#i2c = busio.I2C(board.SCL, board.SDA)
+#accelerometer = adafruit_adxl34x.ADXL345(i2c)
 
 
 
@@ -58,7 +62,6 @@ if TESTING:
 # Global Variables
 Data_Names = ["time","accel_x", "accel_y", "accel_z"]
 Data_Values = []
-
 
 ################################################################################
 # Support functions
@@ -139,10 +142,10 @@ class State(object):
         pass
 
     def update(self, machine):
-        if switch.fell:
-            machine.paused_state = machine.state.name
-            machine.pause()
-            return False
+        #if switch.fell:
+         #   machine.paused_state = machine.state.name
+          #  machine.pause()
+          #  return False
         return True
 
 # Wait for 10 seconds to midnight or the witch to be pressed,
@@ -152,6 +155,8 @@ class IdleState(State):
 
     def __init__(self):
         super().__init__()
+        self.entered1 = time.monotonic()
+        led.value = False
 
     @property
     def name(self):
@@ -159,12 +164,22 @@ class IdleState(State):
 
     def enter(self, machine):
         State.enter(self, machine)
+        self.entered1 = time.monotonic()
+        led.value = False
 
     def exit(self, machine):
         State.exit(self, machine)
 
     def update(self, machine):
-        State.update(self, machine)
+
+        if State.update(self, machine):
+            now = time.monotonic()
+            if now - self.entered1 >= 3.0:
+                print("in idle")
+
+                led.value = True
+                machine.go_to_state('transmit')
+
 
 
 
@@ -263,6 +278,8 @@ class TransmitState(State):
 
     def __init__(self):
         super().__init__()
+        self.entered = time.monotonic()
+        led.value = True
 
     @property
     def name(self):
@@ -270,14 +287,18 @@ class TransmitState(State):
 
     def enter(self, machine):
         State.enter(self, machine)
+        self.entered = time.monotonic()
+        led.value = True
 
     def exit(self, machine):
         State.exit(self, machine)
 
     def update(self, machine):
-        State.update(self, machine)
-
-
+        if State.update(self, machine):
+            now = time.monotonic()
+            if now - self.entered >= 1.0:
+                led.value = False
+                machine.go_to_state('idle')
 
 #Transmit State uses LORA to transmit the data
 
@@ -338,8 +359,7 @@ machine.add_state(CriticalState())
 
 
 
-machine.go_to_state('waiting')
+machine.go_to_state('idle')
 
 while True:
-    switch.update()
     machine.update()

@@ -8,7 +8,6 @@ import adafruit_sdcard
 import storage
 import adafruit_adxl34x
 
-print("Hello, world!")
 
 
 
@@ -35,11 +34,11 @@ led = digitalio.DigitalInOut(LED_PIN)
 led.direction = digitalio.Direction.OUTPUT
 
 # Connect to the card and mount the filesystem.
-spi = busio.SPI(board.SD_SCK, board.SD_MOSI, board.SD_MISO)
-cs = digitalio.DigitalInOut(board.SD_CS)
-sdcard = adafruit_sdcard.SDCard(spi, cs)
-vfs = storage.VfsFat(sdcard)
-storage.mount(vfs, "/sd")
+#spi = busio.SPI(board.SD_SCK, board.SD_MOSI, board.SD_MISO)
+#cs = digitalio.DigitalInOut(board.SD_CS)
+#sdcard = adafruit_sdcard.SDCard(spi, cs)
+#vfs = storage.VfsFat(sdcard)
+#storage.mount(vfs, "/sd")
 
 # setup accelerometer - this is temp and will require code for multiple accels and the i2c multiplexer
 #i2c = busio.I2C(board.SCL, board.SDA)
@@ -252,7 +251,7 @@ class LogState(State):
 
     def update(self, machine):
         State.update(self, machine)
-        machine.go_to_state('save')
+        machine.go_to_state('transmit')
 
 
 #SaveState saves all the data collected in the last iteration to the SD card
@@ -302,6 +301,8 @@ class TransmitState(State):
 
 
     def exit(self, machine):
+        print("Exiting Transmit")
+
         State.exit(self, machine)
 
     def update(self, machine):
@@ -309,6 +310,7 @@ class TransmitState(State):
             now = time.monotonic()
             if now - self.entered >= 1.0:
                 led.value = False
+                print("transmitting data.........")
                 machine.go_to_state('idle')
 
 #Transmit State uses LORA to transmit the data

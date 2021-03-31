@@ -1,4 +1,4 @@
-# This is the code to Transmit - M0
+# This is the code to Transmit - M4
 import board
 import busio
 import time
@@ -19,8 +19,7 @@ def sendData(data):
     if data:
         ts = pack_data(data)
         rfm9x.send(ts)
-    # Leaving this in incase we want to use later
-    # time.sleep(0.1)
+
 
 # radio frequency in MHz
 radio_freq = 915.0
@@ -29,9 +28,8 @@ radio_freq = 915.0
 spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
 
 # initializes the pinouts
-cs = digitalio.DigitalInOut(board.RFM9X_CS)
-reset = digitalio.DigitalInOut(board.RFM9X_RST)
-
+cs = digitalio.DigitalInOut(board.D5)
+reset = digitalio.DigitalInOut(board.D6)
 # initializes the rfm radio object, using the adafruit_rfm9x class
 rfm9x = adafruit_rfm9x.RFM9x(spi, cs, reset, radio_freq)
 

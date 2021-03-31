@@ -1,4 +1,4 @@
-# Code for Receiving Node (M4)
+# Code for Receiving Node (M0)
 import digitalio
 import board
 import busio
@@ -26,8 +26,8 @@ radio_freq = 915.0
 spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
 
 # initializes the pinouts
-cs = digitalio.DigitalInOut(board.D5)
-reset = digitalio.DigitalInOut(board.D6)
+cs = digitalio.DigitalInOut(board.RFM9X_CS)
+reset = digitalio.DigitalInOut(board.RFM9X_RST)
 
 # initializes the rfm radio object, using the adafruit_rfm9x class
 rfm9x = adafruit_rfm9x.RFM9x(spi, cs, reset, radio_freq, baudrate=5000000)

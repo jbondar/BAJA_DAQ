@@ -1,4 +1,3 @@
-
 import board
 import time
 import random
@@ -7,10 +6,7 @@ import busio
 import adafruit_sdcard
 import storage
 import adafruit_adxl34x
-
-print("Hello, world!")
-
-
+import adafruit_lsm9ds1
 
 # Set to false to disable testing/tracing code
 TESTING = False
@@ -25,10 +21,10 @@ LED_PIN = board.D13
 # Setup hardware
 
 # Setup a test switch connected to D9
-#switch_io = digitalio.DigitalInOut(SWITCH_PIN)
-#switch_io.direction = digitalio.Direction.INPUT
-#switch_io.pull = digitalio.Pull.UP
-#switch = Debouncer(switch_io)
+# switch_io = digitalio.DigitalInOut(SWITCH_PIN)
+# switch_io.direction = digitalio.Direction.INPUT
+# switch_io.pull = digitalio.Pull.UP
+# switch = Debouncer(switch_io)
 
 # Setup a LED connected to D13 (led is smt on board)
 led = digitalio.DigitalInOut(LED_PIN)
@@ -41,18 +37,21 @@ sdcard = adafruit_sdcard.SDCard(spi, cs)
 vfs = storage.VfsFat(sdcard)
 storage.mount(vfs, "/sd")
 
-# setup accelerometer - this is temp and will require code for multiple accels and the i2c multiplexer
-#i2c = busio.I2C(board.SCL, board.SDA)
-#i2c = busio.I2C(board.SCL, board.SDA)
-#accelerometer = adafruit_adxl34x.ADXL345(i2c)
+# setup lsm9ds1 accel/gyro/mag combo
+i2c = busio.I2C(board.SCL, board.SDA)
+LSM1 = adafruit_lsm9ds1.LSM9DS1_I2C(i2c)
 
+# setup accelerometer - this is temp and will require code for multiple accels and the i2c multiplexer
+# i2c = busio.I2C(board.SCL, board.SDA)
+# i2c = busio.I2C(board.SCL, board.SDA)
+# accelerometer = adafruit_adxl34x.ADXL345(i2c)
 
 
 # Set the time for testing
 # Once finished testing, the time can be set using the REPL using similar code
 if TESTING:
     #                     year, mon, date, hour, min, sec, wday, yday, isdst
-    t = time.struct_time((2018,  12,   31,   23,  58,  55,    1,   -1,    -1))
+    t = time.struct_time((2018, 12, 31, 23, 58, 55, 1, -1, -1))
     # you must set year, mon, date, hour, min, sec and weekday
     # yearday is not supported, isdst can be set but we don't do anything with it at this time
     print("Setting time to:", t)
@@ -61,7 +60,13 @@ if TESTING:
 
 ################################################################################
 # Global Variables
-Data_Names = ["time", "accel_x", "accel_y", "accel_z"]
+Data_Names = ["time", "temp", "accel_x", "accel_y", "accel_z", "gyro_x", "gyro_y", "gyro_z", "mag_x", "mag_y", "mag_z"]
+
+# Set the sampling rates of the sensors here in Hz
+Rate_Center_Accel = 30
+Rate_Center_Gyro = 40
+Rate_Center_Mag = 50
+Rate_Center_Temp = 1 / 5
 
 
 ################################################################################
@@ -73,9 +78,6 @@ def log(s):
         print(s)
 
 
-
-
-
 ################################################################################
 # State Machine
 
@@ -85,7 +87,7 @@ class StateMachine(object):
         self.state = None
         self.states = {}
         self.Data_Values = []
-
+        self.clocktime = time.monotonic()
 
     def add_state(self, state):
         self.states[state.name] = state
@@ -118,10 +120,6 @@ class StateMachine(object):
         log('Resuming %s' % (self.state.name))
 
 
-
-
-
-
 ################################################################################
 # States
 
@@ -144,11 +142,12 @@ class State(object):
         pass
 
     def update(self, machine):
-        #if switch.fell:
-         #   machine.paused_state = machine.state.name
-          #  machine.pause()
-          #  return False
+        # if switch.fell:
+        #   machine.paused_state = machine.state.name
+        #  machine.pause()
+        #  return False
         return True
+
 
 # Wait for 10 seconds to midnight or the witch to be pressed,
 # then drop the ball.
@@ -183,9 +182,7 @@ class IdleState(State):
                 machine.go_to_state('log')
 
 
-
-
-#Handles saving of the final file and file system managment
+# Handles saving of the final file and file system managment
 
 class HandleState(State):
 
@@ -206,9 +203,7 @@ class HandleState(State):
         State.update(self, machine)
 
 
-
-
-#Creates a new CSV file and does file system managment
+# Creates a new CSV file and does file system managment
 
 class NewFileState(State):
 
@@ -229,8 +224,6 @@ class NewFileState(State):
         State.update(self, machine)
 
 
-
-
 ## LogState logs the data and then saves it to the global data array. It then goes to the write state
 
 class LogState(State):
@@ -244,18 +237,30 @@ class LogState(State):
 
     def enter(self, machine):
         State.enter(self, machine)
-        machine.Data_Values = [1, 2, 3, 4]
-
+        machine.Data_Values = []
+        self.count = 0
+        print("entering save")
 
     def exit(self, machine):
         State.exit(self, machine)
 
     def update(self, machine):
         State.update(self, machine)
-        machine.go_to_state('save')
+        now = time.monotonic()
+        for i in range(len(Data_Names)):
+            print(((machine.clocktime - now) % Rate_Center_Temp))
+            if i == 0 and ((machine.clocktime - now) % Rate_Center_Temp) == 0:
+                Data_Names[i] = LSM1.temperature
+                self.count = self.count + 1
+
+            else:
+                Data_Names[i] = False
+
+        if self.count > 0:
+            machine.go_to_state('save')
 
 
-#SaveState saves all the data collected in the last iteration to the SD card
+# SaveState saves all the data collected in the last iteration to the SD card
 
 class SaveState(State):
 
@@ -269,7 +274,6 @@ class SaveState(State):
     def enter(self, machine):
         State.enter(self, machine)
 
-
     def exit(self, machine):
         State.exit(self, machine)
 
@@ -277,11 +281,11 @@ class SaveState(State):
         State.update(self, machine)
         with open("/sd/data.csv", "a") as file:
             print("saving data....")
-            file.write(str(machine.Data_Values[0]) + "," + str(machine.Data_Values[1])  + "," + str(machine.Data_Values[2])  + "," + str(machine.Data_Values[3]) + "\n")
+            # file.write(str(machine.Data_Values[0]) + "," + str(machine.Data_Values[1])  + "," + str(machine.Data_Values[2])  + "," + str(machine.Data_Values[3]) + "\n")
         machine.go_to_state("transmit")
 
 
-#Transmit State uses LORA to transmit the data
+# Transmit State uses LORA to transmit the data
 
 class TransmitState(State):
 
@@ -300,7 +304,6 @@ class TransmitState(State):
         led.value = True
         print("Entering Transmit")
 
-
     def exit(self, machine):
         State.exit(self, machine)
 
@@ -311,7 +314,8 @@ class TransmitState(State):
                 led.value = False
                 machine.go_to_state('idle')
 
-#Transmit State uses LORA to transmit the data
+
+# Transmit State uses LORA to transmit the data
 
 class DisplayState(State):
 
@@ -332,7 +336,7 @@ class DisplayState(State):
         State.update(self, machine)
 
 
-#Transmit State uses LORA to transmit the data
+# Transmit State uses LORA to transmit the data
 
 class CriticalState(State):
 
@@ -367,7 +371,6 @@ machine.add_state(SaveState())
 machine.add_state(TransmitState())
 machine.add_state(DisplayState())
 machine.add_state(CriticalState())
-
 
 print("hello")
 

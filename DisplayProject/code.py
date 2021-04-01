@@ -1,37 +1,15 @@
 
-import board
-import time
-import random
-import digitalio
-import busio
-import adafruit_sdcard
-import storage
-import adafruit_adxl34x
-
-
-
-
-# Set to false to disable testing/tracing code
-TESTING = False
-
-# Implementation dependant things to tweak
-
-
-# Pins
-SWITCH_PIN = board.D9
-LED_PIN = board.D13
-################################################################################
-# Setup hardware
-
 # Setup a test switch connected to D9
 import board
 import time
 import random
 import digitalio
 import busio
-import adafruit_sdcard
+#import adafruit_sdcard
+import adafruit_rfm9x
+import struct
 import storage
-import adafruit_adxl34x
+#import adafruit_adxl34x
 
 print("Hello, world!")
 
@@ -44,7 +22,7 @@ TESTING = False
 
 
 # Pins
-SWITCH_PIN = board.D9
+#SWITCH_PIN = board.D9
 LED_PIN = board.D13
 ################################################################################
 # Setup hardware
@@ -71,8 +49,6 @@ led.direction = digitalio.Direction.OUTPUT
 #i2c = busio.I2C(board.SCL, board.SDA)
 #accelerometer = adafruit_adxl34x.ADXL345(i2c)
 
-
-
 # Set the time for testing
 # Once finished testing, the time can be set using the REPL using similar code
 if TESTING:
@@ -88,6 +64,13 @@ if TESTING:
 # Global Variables
 Data_Names = ["time", "accel_x", "accel_y", "accel_z"]
 
+# Lora Info
+radio_freq = 915.0
+spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
+cs = digitalio.DigitalInOut(board.D5)
+reset = digitalio.DigitalInOut(board.D6)
+
+
 
 ################################################################################
 # Support functions
@@ -97,7 +80,20 @@ def log(s):
     if TESTING:
         print(s)
 
+# converts data to byte array - Lohra
+def pack_data(data_to_pack):
+    # First encode the number of data items, then the actual items
+    ba = struct.pack("!I" + "d" * len(data_to_pack),
+                len(data_to_pack), *data_to_pack)
+    return ba
 
+# sendData sends the converted data to our 2nd node
+def sendData(data):
+    # checks to see if data is null
+    print(data)
+    if data:
+        ts = pack_data(data)
+        rf.send(ts)
 
 
 
@@ -141,7 +137,6 @@ class StateMachine(object):
             self.state.exit(self)
         self.state = self.states[state_name]
         log('Resuming %s' % (self.state.name))
-
 
 
 
@@ -308,11 +303,19 @@ class SaveState(State):
 
 #Transmit State uses LORA to transmit the data
 
+# IGNORE THIS
+#rfm9x = adafruit_rfm9x.RFM9x(spi, cs, reset, radio_freq)
+#rfm9x.tx_power = 23
+#rfm9x.enable_crc = True
+#rfm9x.node = 1
+#rfm9x.destination = 2
+
 class TransmitState(State):
 
     def __init__(self):
         super().__init__()
         self.entered = time.monotonic()
+        self.rf = adafruit_rfm9x.RFM9x(spi, cs, reset, radio_freq)
         led.value = True
 
     @property
@@ -336,9 +339,10 @@ class TransmitState(State):
             if now - self.entered >= 1.0:
                 led.value = False
                 print("Transmitting...")
+                rf.send("hi")
+                #sendData(data[3])
                 machine.go_to_state('idle')
 
-#Transmit State uses LORA to transmit the data
 
 class DisplayState(State):
 

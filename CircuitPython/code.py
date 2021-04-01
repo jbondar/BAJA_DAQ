@@ -8,11 +8,12 @@ import storage
 import adafruit_adxl34x
 import adafruit_lsm9ds1
 
+print("recording?")
+
 # Set to false to disable testing/tracing code
 TESTING = False
 
 # Implementation dependant things to tweak
-
 
 # Pins
 SWITCH_PIN = board.D9
@@ -49,24 +50,34 @@ LSM1 = adafruit_lsm9ds1.LSM9DS1_I2C(i2c)
 
 # Set the time for testing
 # Once finished testing, the time can be set using the REPL using similar code
-if TESTING:
-    #                     year, mon, date, hour, min, sec, wday, yday, isdst
-    t = time.struct_time((2018, 12, 31, 23, 58, 55, 1, -1, -1))
-    # you must set year, mon, date, hour, min, sec and weekday
-    # yearday is not supported, isdst can be set but we don't do anything with it at this time
-    print("Setting time to:", t)
-    rtc.datetime = t
-    print()
+# if TESTING:
+#                     year, mon, date, hour, min, sec, wday, yday, isdst
+# t = time.struct_time((2018,  12,   31,   23,  58,  55,    1,   -1,    -1))
+# you must set year, mon, date, hour, min, sec and weekday
+# yearday is not supported, isdst can be set but we don't do anything with it at this time
+# print("Setting time to:", t)
+# rtc.datetime = t
+# print()
 
 ################################################################################
 # Global Variables
-Data_Names = ["time", "temp", "accel_x", "accel_y", "accel_z", "gyro_x", "gyro_y", "gyro_z", "mag_x", "mag_y", "mag_z"]
 
 # Set the sampling rates of the sensors here in Hz
-Rate_Center_Accel = 30
-Rate_Center_Gyro = 40
-Rate_Center_Mag = 50
+
+Rate_Center_Accel = 1 / 3
+Rate_Center_Gyro = 2
+Rate_Center_Mag = 1 / 2
 Rate_Center_Temp = 1 / 5
+
+Data_Header_Names = ["time", "temp", "accel_x", "accel_y", "accel_z", "gyro_x", "gyro_y", "gyro_z", "mag_x", "mag_y",
+                     "mag_z"]
+Data_Names = ["time", "temperature", "acceleration", "acceleration", "acceleration", "gyro", "gyro", "gyro", "magnetic",
+              "magnetic", "magnetic"]
+Rates = [1 / 10, Rate_Center_Temp, Rate_Center_Accel, Rate_Center_Accel, Rate_Center_Accel, Rate_Center_Gyro,
+         Rate_Center_Gyro, Rate_Center_Gyro, Rate_Center_Mag, Rate_Center_Mag, Rate_Center_Mag]
+Tuple_index = [0, 0, 0, 1, 2, 0, 1, 2, 0, 1, 2]
+Sensor_On = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+Data_Logged = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 
 ################################################################################
@@ -76,6 +87,28 @@ def log(s):
     """Print the argument if testing/tracing is enabled."""
     if TESTING:
         print(s)
+
+
+def log_condition(i, sensor_name, sensor_variable, now, tuple_num, self):
+    if i != 0 and (now - machine.time_past[i]) >= Rates[i]:
+        log("I is:" + str(i))
+        temp_list = [0]
+        temp_tuple = getattr(sensor_name, sensor_variable)
+        if isinstance(temp_tuple, map):
+            log('in the loop')
+            temp_tuple = list(temp_tuple)
+            Data_Logged[i] = temp_tuple[tuple_num]
+            self.count = self.count + 1
+            machine.time_past[i] = time.monotonic()
+
+        else:
+            temp_list[0] = temp_tuple
+            Data_Logged[i] = temp_list[tuple_num]
+            self.count = self.count + 1
+            machine.time_past[i] = time.monotonic()
+
+    else:
+        Data_Logged[i] = False
 
 
 ################################################################################
@@ -88,6 +121,7 @@ class StateMachine(object):
         self.states = {}
         self.Data_Values = []
         self.clocktime = time.monotonic()
+        self.time_past = []
 
     def add_state(self, state):
         self.states[state.name] = state
@@ -172,14 +206,8 @@ class IdleState(State):
         State.exit(self, machine)
 
     def update(self, machine):
-
         if State.update(self, machine):
-            now = time.monotonic()
-            if now - self.entered1 >= 3.0:
-                print("in idle")
-
-                led.value = True
-                machine.go_to_state('log')
+            machine.go_to_state('log')
 
 
 # Handles saving of the final file and file system managment
@@ -230,6 +258,8 @@ class LogState(State):
 
     def __init__(self):
         super().__init__()
+        for i in range(len(Data_Names)):
+            machine.time_past.append(time.monotonic())
 
     @property
     def name(self):
@@ -239,24 +269,24 @@ class LogState(State):
         State.enter(self, machine)
         machine.Data_Values = []
         self.count = 0
-        print("entering save")
+        log("entering log")
 
     def exit(self, machine):
         State.exit(self, machine)
+        log("exiting log")
 
     def update(self, machine):
         State.update(self, machine)
         now = time.monotonic()
         for i in range(len(Data_Names)):
-            print(((machine.clocktime - now) % Rate_Center_Temp))
-            if i == 0 and ((machine.clocktime - now) % Rate_Center_Temp) == 0:
-                Data_Names[i] = LSM1.temperature
-                self.count = self.count + 1
+            log_condition(i, LSM1, Data_Names[i], now, Tuple_index[i], self)
 
-            else:
-                Data_Names[i] = False
+        # else:
+        # Data_Logged[i] = 1
 
         if self.count > 0:
+            Data_Logged[0] = now
+            log(Data_Logged)
             machine.go_to_state('save')
 
 
@@ -280,8 +310,14 @@ class SaveState(State):
     def update(self, machine):
         State.update(self, machine)
         with open("/sd/data.csv", "a") as file:
-            print("saving data....")
-            # file.write(str(machine.Data_Values[0]) + "," + str(machine.Data_Values[1])  + "," + str(machine.Data_Values[2])  + "," + str(machine.Data_Values[3]) + "\n")
+            log("saving data....")
+            x = ""
+            for i in range(len(Data_Logged)):
+                if i != len(Data_Logged):
+                    x = x + "," + str(Data_Logged[i])
+                else:
+                    x = x + str(Data_Logged[i])
+            file.write(x + "\n")
         machine.go_to_state("transmit")
 
 
@@ -302,17 +338,13 @@ class TransmitState(State):
         State.enter(self, machine)
         self.entered = time.monotonic()
         led.value = True
-        print("Entering Transmit")
+        log("Entering Transmit")
 
     def exit(self, machine):
         State.exit(self, machine)
 
     def update(self, machine):
-        if State.update(self, machine):
-            now = time.monotonic()
-            if now - self.entered >= 1.0:
-                led.value = False
-                machine.go_to_state('idle')
+        machine.go_to_state('idle')
 
 
 # Transmit State uses LORA to transmit the data
@@ -372,10 +404,7 @@ machine.add_state(TransmitState())
 machine.add_state(DisplayState())
 machine.add_state(CriticalState())
 
-print("hello")
-
 machine.go_to_state('idle')
 
 while True:
     machine.update()
-    time.sleep(.5)

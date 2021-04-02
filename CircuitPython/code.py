@@ -3,7 +3,7 @@ import time
 import random
 import digitalio
 import busio
-import adafruit_sdcard
+import sdcardio
 import storage
 import adafruit_adxl34x
 import adafruit_lsm9ds1
@@ -42,9 +42,10 @@ led = digitalio.DigitalInOut(LED_PIN)
 led.direction = digitalio.Direction.OUTPUT
 
 # Connect to the card and mount the filesystem.
-spi = busio.SPI(board.SD_SCK, board.SD_MOSI, board.SD_MISO)
-cs = digitalio.DigitalInOut(board.SD_CS)
-sdcard = adafruit_sdcard.SDCard(spi, cs)
+spi = busio.SPI(board.SD_SCK, MOSI=board.SD_MOSI, MISO=board.SD_MISO)
+cs = board.SD_CS
+
+sdcard = sdcardio.SDCard(spi, cs)
 vfs = storage.VfsFat(sdcard)
 storage.mount(vfs, "/sd")
 
@@ -76,10 +77,10 @@ LSM1 = adafruit_lsm9ds1.LSM9DS1_I2C(i2c)
 
 # Set the sampling rates of the sensors here in Hz
 
-Rate_Center_Accel = 1 / 3
+Rate_Center_Accel = 1 / 25
 Rate_Center_Gyro = 2
 Rate_Center_Mag = 1 / 2
-Rate_Center_Temp = 1 / 5
+Rate_Center_Temp = 1 / 100
 
 Data_Header_Names = ["time", "temp", "accel_x", "accel_y", "accel_z", "gyro_x", "gyro_y", "gyro_z", "mag_x", "mag_y",
                      "mag_z"]

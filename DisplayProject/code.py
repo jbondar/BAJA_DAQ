@@ -70,7 +70,11 @@ spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
 cs = digitalio.DigitalInOut(board.D5)
 reset = digitalio.DigitalInOut(board.D6)
 
-
+# Test array
+dtt = [[0, 45.5, 2.23], [1, 45.5, 2.23],
+        [2, 45.5, 2.23], [3, 45.5, 2.23],
+        [4, 45.5, 2.23], [5, 45.5, 2.23],
+        [6, 45.5, 2.23], [7, 45.5, 2.23], [8, 45.5, 2.23]]
 
 ################################################################################
 # Support functions
@@ -80,20 +84,7 @@ def log(s):
     if TESTING:
         print(s)
 
-# converts data to byte array - Lohra
-def pack_data(data_to_pack):
-    # First encode the number of data items, then the actual items
-    ba = struct.pack("!I" + "d" * len(data_to_pack),
-                len(data_to_pack), *data_to_pack)
-    return ba
 
-# sendData sends the converted data to our 2nd node
-def sendData(data):
-    # checks to see if data is null
-    print(data)
-    if data:
-        ts = pack_data(data)
-        rf.send(ts)
 
 
 
@@ -316,7 +307,27 @@ class TransmitState(State):
         super().__init__()
         self.entered = time.monotonic()
         self.rf = adafruit_rfm9x.RFM9x(spi, cs, reset, radio_freq)
+        self.rf.tx_power = 23
+        self.rf.enable_crc = True
+        self.rf.node = 1
+        self.rf.destination = 2
         led.value = True
+
+# converts data to byte array - Lora
+    def pack_data(self, data_to_pack):
+        # First encode the number of data items, then the actual items
+        print("length: ", len(data_to_pack))
+        ba = struct.pack("!I" + "d" * len(data_to_pack),
+                    len(data_to_pack), *(data_to_pack))
+        return ba
+
+# sendData sends the converted data to our 2nd node
+    def sendData(self, data):
+    # checks to see if data is null
+        if data:
+            ts = self.pack_data(data)
+            self.rf.send(ts)
+
 
     @property
     def name(self):
@@ -328,19 +339,18 @@ class TransmitState(State):
         led.value = True
         print("Entering Transmit")
 
-
     def exit(self, machine):
         print("Exiting Transmit")
         State.exit(self, machine)
 
     def update(self, machine):
+
         if State.update(self, machine):
             now = time.monotonic()
             if now - self.entered >= 1.0:
                 led.value = False
                 print("Transmitting...")
-                rf.send("hi")
-                #sendData(data[3])
+                self.sendData(dtt[1])
                 machine.go_to_state('idle')
 
 

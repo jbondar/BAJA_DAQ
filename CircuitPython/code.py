@@ -269,11 +269,22 @@ class NewFileState(State):
     def update(self, machine):
         State.update(self, machine)
         temp = "/sd/Saved_Data/data" + str(self.file_num) + ".csv"
+        # this needs to be cleaned up
         try:
             if os.stat(temp):
                 self.file_num = self.file_num + 1
         except:
             machine.filename = temp
+            with open(machine.filename, "a") as file:
+                log("saving data....")
+                x = ""
+                for i in range(len(Data_Header_Names)):
+                    if i != len(Data_Header_Names):
+                        x = x + "," + str(Data_Header_Names[i])
+                    else:
+                        x = x + Data_Header_Names[i]
+                file.write(x + "\n")
+            print(os.listdir("/sd/Saved_Data"))
             machine.go_to_state('log')
 
 

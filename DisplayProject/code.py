@@ -316,7 +316,6 @@ class TransmitState(State):
 # converts data to byte array - Lora
     def pack_data(self, data_to_pack):
         # First encode the number of data items, then the actual items
-        print("length: ", len(data_to_pack))
         ba = struct.pack("!I" + "d" * len(data_to_pack),
                     len(data_to_pack), *(data_to_pack))
         return ba
@@ -325,8 +324,11 @@ class TransmitState(State):
     def sendData(self, data):
     # checks to see if data is null
         if data:
-            ts = self.pack_data(data)
-            self.rf.send(ts)
+            if type(data) == str:
+                self.rf.send(data)
+            else:
+                ts = self.pack_data(data)
+                self.rf.send(ts)
 
 
     @property
@@ -350,7 +352,7 @@ class TransmitState(State):
             if now - self.entered >= 1.0:
                 led.value = False
                 print("Transmitting...")
-                self.sendData(dtt[1])
+                self.sendData(dtt[3])
                 machine.go_to_state('idle')
 
 

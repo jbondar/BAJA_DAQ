@@ -7,6 +7,8 @@ import adafruit_sdcard
 import storage
 import adafruit_adxl34x
 import adafruit_lsm9ds1
+import os
+from adafruit_debouncer import Debouncer
 
 print("recording?")
 
@@ -16,16 +18,24 @@ TESTING = False
 # Implementation dependant things to tweak
 
 # Pins
-SWITCH_PIN = board.D9
+SWITCH_PIN1 = board.D14
+SWITCH_PIN2 = board.D15
+
 LED_PIN = board.D13
 ################################################################################
 # Setup hardware
 
-# Setup a test switch connected to D9
-# switch_io = digitalio.DigitalInOut(SWITCH_PIN)
-# switch_io.direction = digitalio.Direction.INPUT
-# switch_io.pull = digitalio.Pull.UP
-# switch = Debouncer(switch_io)
+# Setup a test switch connected to D14
+switch_1 = digitalio.DigitalInOut(SWITCH_PIN1)
+switch_1.direction = digitalio.Direction.INPUT
+switch_1.pull = digitalio.Pull.UP
+switch1 = Debouncer(switch_1)
+
+# Setup a test switch connected to D15
+switch_2 = digitalio.DigitalInOut(SWITCH_PIN2)
+switch_2.direction = digitalio.Direction.INPUT
+switch_2.pull = digitalio.Pull.UP
+switch2 = Debouncer(switch_2)
 
 # Setup a LED connected to D13 (led is smt on board)
 led = digitalio.DigitalInOut(LED_PIN)
@@ -37,6 +47,8 @@ cs = digitalio.DigitalInOut(board.SD_CS)
 sdcard = adafruit_sdcard.SDCard(spi, cs)
 vfs = storage.VfsFat(sdcard)
 storage.mount(vfs, "/sd")
+
+print(os.listdir("/sd/Saved_Data"))
 
 # setup lsm9ds1 accel/gyro/mag combo
 i2c = busio.I2C(board.SCL, board.SDA)
@@ -122,6 +134,7 @@ class StateMachine(object):
         self.Data_Values = []
         self.clocktime = time.monotonic()
         self.time_past = []
+        self.filename = ""
 
     def add_state(self, state):
         self.states[state.name] = state
@@ -142,7 +155,7 @@ class StateMachine(object):
     # When pausing, don't exit the state
     def pause(self):
         self.state = self.states['paused']
-        log('Pausing')
+        print('Pausing')
         self.state.enter(self)
 
     # When resuming, don't re-enter the state
@@ -176,10 +189,10 @@ class State(object):
         pass
 
     def update(self, machine):
-        # if switch.fell:
-        #   machine.paused_state = machine.state.name
-        #  machine.pause()
-        #  return False
+        if switch2.fell:
+            machine.paused_state = machine.state.name
+            machine.pause()
+            return False
         return True
 
 
@@ -201,13 +214,16 @@ class IdleState(State):
         State.enter(self, machine)
         self.entered1 = time.monotonic()
         led.value = False
+        print("in idle state")
 
     def exit(self, machine):
         State.exit(self, machine)
 
     def update(self, machine):
         if State.update(self, machine):
-            machine.go_to_state('log')
+            if switch1.rose:
+                print("recording started")
+                machine.go_to_state('newfile')
 
 
 # Handles saving of the final file and file system managment
@@ -237,6 +253,7 @@ class NewFileState(State):
 
     def __init__(self):
         super().__init__()
+        self.file_num = 1
 
     @property
     def name(self):
@@ -244,12 +261,20 @@ class NewFileState(State):
 
     def enter(self, machine):
         State.enter(self, machine)
+        self.file_num = 1
 
     def exit(self, machine):
         State.exit(self, machine)
 
     def update(self, machine):
         State.update(self, machine)
+        temp = "/sd/Saved_Data/data" + str(self.file_num) + ".csv"
+        try:
+            if os.stat(temp):
+                self.file_num = self.file_num + 1
+        except:
+            machine.filename = temp
+            machine.go_to_state('log')
 
 
 ## LogState logs the data and then saves it to the global data array. It then goes to the write state
@@ -309,7 +334,7 @@ class SaveState(State):
 
     def update(self, machine):
         State.update(self, machine)
-        with open("/sd/data.csv", "a") as file:
+        with open(machine.filename, "a") as file:
             log("saving data....")
             x = ""
             for i in range(len(Data_Logged)):
@@ -344,7 +369,7 @@ class TransmitState(State):
         State.exit(self, machine)
 
     def update(self, machine):
-        machine.go_to_state('idle')
+        machine.go_to_state('log')
 
 
 # Transmit State uses LORA to transmit the data
@@ -389,6 +414,31 @@ class CriticalState(State):
         State.update(self, machine)
 
 
+class PausedState(State):
+
+    def __init__(self):
+        super().__init__()
+        self.switch_pressed_at = 0
+
+    @property
+    def name(self):
+        return 'paused'
+
+    def enter(self, machine):
+        State.enter(self, machine)
+        self.switch_pressed_at = time.monotonic()
+
+    def exit(self, machine):
+        State.exit(self, machine)
+
+    def update(self, machine):
+        if switch2.fell:
+            machine.resume_state(machine.paused_state)
+        elif not switch2.value:
+            if time.monotonic() - self.switch_pressed_at > 1.0:
+                machine.go_to_state('idle')
+
+
 ################################################################################
 # Create the state machine
 
@@ -403,8 +453,11 @@ machine.add_state(SaveState())
 machine.add_state(TransmitState())
 machine.add_state(DisplayState())
 machine.add_state(CriticalState())
+machine.add_state(PausedState())
 
 machine.go_to_state('idle')
 
 while True:
+    switch1.update()
+    switch2.update()
     machine.update()

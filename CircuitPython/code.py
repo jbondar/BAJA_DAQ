@@ -1,14 +1,17 @@
+
 import board
 import time
 import random
 import digitalio
 import busio
+#import adafruit_sdcard
 import sdcardio
 import storage
 import adafruit_adxl34x
 import adafruit_lsm9ds1
 import os
 from adafruit_debouncer import Debouncer
+
 
 print("recording?")
 
@@ -37,6 +40,7 @@ switch_2.direction = digitalio.Direction.INPUT
 switch_2.pull = digitalio.Pull.UP
 switch2 = Debouncer(switch_2)
 
+
 # Setup a LED connected to D13 (led is smt on board)
 led = digitalio.DigitalInOut(LED_PIN)
 led.direction = digitalio.Direction.OUTPUT
@@ -49,49 +53,49 @@ sdcard = sdcardio.SDCard(spi, cs)
 vfs = storage.VfsFat(sdcard)
 storage.mount(vfs, "/sd")
 
+
 print(os.listdir("/sd/Saved_Data"))
 
-# setup lsm9ds1 accel/gyro/mag combo
+#setup lsm9ds1 accel/gyro/mag combo
 i2c = busio.I2C(board.SCL, board.SDA)
 LSM1 = adafruit_lsm9ds1.LSM9DS1_I2C(i2c)
 
+
+
 # setup accelerometer - this is temp and will require code for multiple accels and the i2c multiplexer
-# i2c = busio.I2C(board.SCL, board.SDA)
-# i2c = busio.I2C(board.SCL, board.SDA)
-# accelerometer = adafruit_adxl34x.ADXL345(i2c)
+#i2c = busio.I2C(board.SCL, board.SDA)
+#i2c = busio.I2C(board.SCL, board.SDA)
+#accelerometer = adafruit_adxl34x.ADXL345(i2c)
+
 
 
 # Set the time for testing
 # Once finished testing, the time can be set using the REPL using similar code
-# if TESTING:
-#                     year, mon, date, hour, min, sec, wday, yday, isdst
-# t = time.struct_time((2018,  12,   31,   23,  58,  55,    1,   -1,    -1))
-# you must set year, mon, date, hour, min, sec and weekday
-# yearday is not supported, isdst can be set but we don't do anything with it at this time
-# print("Setting time to:", t)
-# rtc.datetime = t
-# print()
+#if TESTING:
+    #                     year, mon, date, hour, min, sec, wday, yday, isdst
+    #t = time.struct_time((2018,  12,   31,   23,  58,  55,    1,   -1,    -1))
+    # you must set year, mon, date, hour, min, sec and weekday
+    # yearday is not supported, isdst can be set but we don't do anything with it at this time
+    #print("Setting time to:", t)
+    #rtc.datetime = t
+   # print()
 
 ################################################################################
 # Global Variables
 
 # Set the sampling rates of the sensors here in Hz
 
-Rate_Center_Accel = 1 / 25
-Rate_Center_Gyro = 2
-Rate_Center_Mag = 1 / 2
-Rate_Center_Temp = 1 / 100
+Rate_Center_Accel = 1/25
+Rate_Center_Gyro =2
+Rate_Center_Mag = 1/2
+Rate_Center_Temp = 1/100
 
-Data_Header_Names = ["time", "temp", "accel_x", "accel_y", "accel_z", "gyro_x", "gyro_y", "gyro_z", "mag_x", "mag_y",
-                     "mag_z"]
-Data_Names = ["time", "temperature", "acceleration", "acceleration", "acceleration", "gyro", "gyro", "gyro", "magnetic",
-              "magnetic", "magnetic"]
-Rates = [1 / 10, Rate_Center_Temp, Rate_Center_Accel, Rate_Center_Accel, Rate_Center_Accel, Rate_Center_Gyro,
-         Rate_Center_Gyro, Rate_Center_Gyro, Rate_Center_Mag, Rate_Center_Mag, Rate_Center_Mag]
-Tuple_index = [0, 0, 0, 1, 2, 0, 1, 2, 0, 1, 2]
-Sensor_On = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-Data_Logged = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-
+Data_Header_Names = ["time", "temp", "accel_x", "accel_y", "accel_z", "gyro_x", "gyro_y", "gyro_z", "mag_x", "mag_y", "mag_z"]
+Data_Names = ["time", "temperature", "acceleration", "acceleration", "acceleration", "gyro", "gyro", "gyro", "magnetic", "magnetic", "magnetic"]
+Rates = [1/10, Rate_Center_Temp, Rate_Center_Accel, Rate_Center_Accel, Rate_Center_Accel, Rate_Center_Gyro, Rate_Center_Gyro, Rate_Center_Gyro, Rate_Center_Mag, Rate_Center_Mag, Rate_Center_Mag]
+Tuple_index = [0,0,0,1,2,0,1,2,0,1,2]
+Sensor_On =[1,1,1,1,1,1,1,1,1,1,1]
+Data_Logged = [0,0,0,0,0,0,0,0,0,0,0]
 
 ################################################################################
 # Support functions
@@ -102,27 +106,61 @@ def log(s):
         print(s)
 
 
-def log_condition(i, sensor_name, sensor_variable, now, tuple_num, self):
-    if i != 0 and (now - machine.time_past[i]) >= Rates[i]:
-        log("I is:" + str(i))
-        temp_list = [0]
-        temp_tuple = getattr(sensor_name, sensor_variable)
-        if isinstance(temp_tuple, map):
-            log('in the loop')
-            temp_tuple = list(temp_tuple)
-            Data_Logged[i] = temp_tuple[tuple_num]
-            self.count = self.count + 1
-            machine.time_past[i] = time.monotonic()
+def timer_func(func):
+    """
+    A timer decorator
+    """
+    def function_timer(*args, **kwargs):
+        """
+        A nested function for timing other functions
+        """
+        start = time.monotonic()
+        value = func(*args, **kwargs)
+        end = time.monotonic()
+        runtime = end - start
+        msg = "The runtime for {func} took {time} seconds to complete"
+        print(msg.format(func=func.__name__,
+                         time=runtime))
+        return value
+    return function_timer
+
+
+
+def log_condition(i,sensor_name,sensor_variable,now,tuple_num,self):
+        if i != 0 and (now - machine.time_past[i]) >= Rates[i]:
+            log("I is:" + str(i))
+            temp_list = [0]
+            temp_tuple = getattr(sensor_name, sensor_variable)
+            if isinstance(temp_tuple, map):
+                log('in the loop')
+                temp_tuple = list(temp_tuple)
+                Data_Logged[i] = temp_tuple[tuple_num]
+                self.count = self.count + 1
+                machine.time_past[i] = time.monotonic()
+
+            else:
+                temp_list[0] = temp_tuple
+                Data_Logged[i] = temp_list[tuple_num]
+                self.count = self.count + 1
+                machine.time_past[i] = time.monotonic()
 
         else:
-            temp_list[0] = temp_tuple
-            Data_Logged[i] = temp_list[tuple_num]
-            self.count = self.count + 1
-            machine.time_past[i] = time.monotonic()
+            Data_Logged[i] = False
 
-    else:
-        Data_Logged[i] = False
+def log_helper(num,sensor_name,sensor_variable,now,tuple_num,self):
+    for i in range(num):
+            log_condition(i,sensor_name,sensor_variable[i],now,tuple_num[i],self)
 
+def save_data(filename,data):
+     with open(filename, "a") as file:
+            log("saving data....")
+            x = ""
+            for i in range(len(Data_Logged)):
+                if i != len(Data_Logged):
+                    x = x + "," + str(Data_Logged[i])
+                else:
+                    x = x + str(Data_Logged[i])
+            file.write(x + "\n")
 
 ################################################################################
 # State Machine
@@ -136,6 +174,7 @@ class StateMachine(object):
         self.clocktime = time.monotonic()
         self.time_past = []
         self.filename = ""
+
 
     def add_state(self, state):
         self.states[state.name] = state
@@ -168,6 +207,10 @@ class StateMachine(object):
         log('Resuming %s' % (self.state.name))
 
 
+
+
+
+
 ################################################################################
 # States
 
@@ -196,7 +239,6 @@ class State(object):
             return False
         return True
 
-
 # Wait for 10 seconds to midnight or the witch to be pressed,
 # then drop the ball.
 
@@ -222,12 +264,14 @@ class IdleState(State):
 
     def update(self, machine):
         if State.update(self, machine):
-            if switch1.rose:
+             if switch1.rose:
                 print("recording started")
                 machine.go_to_state('newfile')
 
 
-# Handles saving of the final file and file system managment
+
+
+#Handles saving of the final file and file system managment
 
 class HandleState(State):
 
@@ -248,7 +292,9 @@ class HandleState(State):
         State.update(self, machine)
 
 
-# Creates a new CSV file and does file system managment
+
+
+#Creates a new CSV file and does file system managment
 
 class NewFileState(State):
 
@@ -270,7 +316,7 @@ class NewFileState(State):
     def update(self, machine):
         State.update(self, machine)
         temp = "/sd/Saved_Data/data" + str(self.file_num) + ".csv"
-        # this needs to be cleaned up
+        #this needs to be cleaned up
         try:
             if os.stat(temp):
                 self.file_num = self.file_num + 1
@@ -289,6 +335,9 @@ class NewFileState(State):
             machine.go_to_state('log')
 
 
+
+
+
 ## LogState logs the data and then saves it to the global data array. It then goes to the write state
 
 class LogState(State):
@@ -297,6 +346,7 @@ class LogState(State):
         super().__init__()
         for i in range(len(Data_Names)):
             machine.time_past.append(time.monotonic())
+
 
     @property
     def name(self):
@@ -308,18 +358,23 @@ class LogState(State):
         self.count = 0
         log("entering log")
 
+
+
     def exit(self, machine):
         State.exit(self, machine)
         log("exiting log")
 
+
     def update(self, machine):
         State.update(self, machine)
         now = time.monotonic()
-        for i in range(len(Data_Names)):
-            log_condition(i, LSM1, Data_Names[i], now, Tuple_index[i], self)
+        log_helper(len(Data_Names),LSM1,Data_Names,now,Tuple_index,self)
 
-        # else:
-        # Data_Logged[i] = 1
+        #for i in range(len(Data_Names)):
+        #    log_condition(i,LSM1,Data_Names[i],now,Tuple_index[i],self)
+
+        #else:
+            #Data_Logged[i] = 1
 
         if self.count > 0:
             Data_Logged[0] = now
@@ -327,7 +382,13 @@ class LogState(State):
             machine.go_to_state('save')
 
 
-# SaveState saves all the data collected in the last iteration to the SD card
+
+
+
+
+
+
+#SaveState saves all the data collected in the last iteration to the SD card
 
 class SaveState(State):
 
@@ -341,24 +402,17 @@ class SaveState(State):
     def enter(self, machine):
         State.enter(self, machine)
 
+
     def exit(self, machine):
         State.exit(self, machine)
 
     def update(self, machine):
         State.update(self, machine)
-        with open(machine.filename, "a") as file:
-            log("saving data....")
-            x = ""
-            for i in range(len(Data_Logged)):
-                if i != len(Data_Logged):
-                    x = x + "," + str(Data_Logged[i])
-                else:
-                    x = x + str(Data_Logged[i])
-            file.write(x + "\n")
-        machine.go_to_state("transmit")
+        save_data(machine.filename,Data_Logged)
+        machine.go_to_state("save")
 
 
-# Transmit State uses LORA to transmit the data
+#Transmit State uses LORA to transmit the data
 
 class TransmitState(State):
 
@@ -377,14 +431,14 @@ class TransmitState(State):
         led.value = True
         log("Entering Transmit")
 
+
     def exit(self, machine):
         State.exit(self, machine)
 
     def update(self, machine):
         machine.go_to_state('log')
 
-
-# Transmit State uses LORA to transmit the data
+#Transmit State uses LORA to transmit the data
 
 class DisplayState(State):
 
@@ -405,7 +459,7 @@ class DisplayState(State):
         State.update(self, machine)
 
 
-# Transmit State uses LORA to transmit the data
+#Transmit State uses LORA to transmit the data
 
 class CriticalState(State):
 
@@ -444,6 +498,7 @@ class PausedState(State):
         State.exit(self, machine)
 
     def update(self, machine):
+        print("in paused")
         if switch2.fell:
             machine.resume_state(machine.paused_state)
         elif not switch2.value:
@@ -466,6 +521,8 @@ machine.add_state(TransmitState())
 machine.add_state(DisplayState())
 machine.add_state(CriticalState())
 machine.add_state(PausedState())
+
+
 
 machine.go_to_state('idle')
 
